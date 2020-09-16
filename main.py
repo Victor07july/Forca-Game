@@ -3,8 +3,8 @@ import math
 
 pygame.init()
 
-#Define a resolução. largura x altura // width x height
-LARGURA, ALTURA = (800,600) 
+#Define a resolução. largura x altura
+LARGURA, ALTURA = (800,600) #WIDTH, HEIGHT
 janela = pygame.display.set_mode((LARGURA, ALTURA))
 
 #Plano de fundo/background (precisa ser colocado no loop)
@@ -58,8 +58,7 @@ jogorodando = True
 def desenhar():
     janela.fill((0, 0, 0))
 
-    
-    janela.blit(background, (0,0))
+    janela.blit(background, (0,0)) #Desenha o quadro verde na tela (Linha 11)
 
     #Desenhar palavras
     mostrar_palavra = ''
@@ -115,9 +114,15 @@ while jogorodando:
             break
 
     if ganhou:
-        print('Parabéns')
+        janela.blit(background, (0, 0))
+        texto = FONTE_PALAVRA.render('Você GANHOU!', 1, BRANCO)
+        janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
+        pygame.display.update()
+        pygame.time.delay(3000)
+        break
 
     if situacao_forca == 6:
         print('Você perdeu')
+        break
 
 pygame.quit()
