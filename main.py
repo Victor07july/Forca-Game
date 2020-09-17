@@ -106,7 +106,7 @@ while jogorodando:
                         if ltr not in palavra:
                             situacao_forca += 1
 
-    #Ver se você ganhou o perdeu.
+    #Ver se você ganhou ou perdeu.
     ganhou = True
     for letra in palavra:
         if letra not in acertos:
@@ -118,11 +118,15 @@ while jogorodando:
         texto = FONTE_PALAVRA.render('Você GANHOU!', 1, BRANCO)
         janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
         pygame.display.update()
-        pygame.time.delay(3000)
+        pygame.time.delay(300)
         break
 
     if situacao_forca == 6:
-        print('Você perdeu')
+        janela.blit(background, (0, 0))
+        texto = FONTE_PALAVRA.render('Você perdeu...', 1, BRANCO)
+        janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
+        pygame.display.update()
+        pygame.time.delay(300)
         break
 
 pygame.quit()
