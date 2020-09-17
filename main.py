@@ -1,5 +1,6 @@
 import pygame
 import math
+from random import randint
 
 pygame.init()
 
@@ -45,7 +46,15 @@ PRETO = (0, 0, 0)
 
 #Variáveis do jogo
 situacao_forca = 0
-palavra = 'DESENVOLVEDOR'
+palavra = randint(1, 3)
+
+if palavra == 1:
+    palavra = 'DESENVOLVEDOR'
+elif palavra == 2:
+    palavra = 'NATALIA'
+elif palavra == 3:
+    palavra = 'CELULAR'
+
 acertos = [] #letras que letras foram acertadas
 
 #Loop do jogo
