@@ -52,7 +52,7 @@ if palavra == 1:
     palavra = 'DESENVOLVEDOR'
 elif palavra == 2:
     palavra = 'NATALIA'
-elif palavra == 3:
+else:
     palavra = 'CELULAR'
 
 acertos = [] #letras que letras foram acertadas
