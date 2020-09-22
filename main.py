@@ -1,6 +1,6 @@
 import pygame
 import math
-from random import randint
+import random
 
 pygame.init()
 
@@ -39,6 +39,7 @@ for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 
 #Fontes
 FONTE_LETRA = pygame.font.SysFont('comicsans', 40) #fonte e tamanho
 FONTE_PALAVRA = pygame.font.SysFont('comicsans', 30)
+FONTE_TITULO = pygame.font.SysFont('comicsans', 30)
 
 #cores 
 BRANCO = (255, 255, 255)
@@ -46,28 +47,20 @@ PRETO = (0, 0, 0)
 
 #Variáveis do jogo
 situacao_forca = 0
-palavra = randint(1, 3)
-
-if palavra == 1:
-    palavra = 'DESENVOLVEDOR'
-elif palavra == 2:
-    palavra = 'NATALIA'
-else:
-    palavra = 'CELULAR'
+palavras = ['NATALIA', 'DESENVOLVEDOR', 'CELULAR']
+palavra = random.choice(palavras)
 
 acertos = [] #letras que letras foram acertadas
-
-#Loop do jogo
-FPS = 60 #FPS máximo (vai na linha 20)
-clock = pygame.time.Clock() #Variável com a função de travar o clock
-
-jogorodando = True
 
 #Função para desenhar itnes no jogo, deve ficar dentro do loop  (Linha 67)
 def desenhar():
     janela.fill((0, 0, 0))
 
     janela.blit(background, (0,0)) #Desenha o quadro verde na tela (Linha 11)
+
+    #Desenhar título
+    texto = FONTE_TITULO.render('FORCA GAME', 1, BRANCO)
+    janela.blit(texto, (LARGURA/2 -  texto.get_width()/2, 35))
 
     #Desenhar palavras
     mostrar_palavra = ''
@@ -90,52 +83,62 @@ def desenhar():
     janela.blit(imagens[situacao_forca], (150,100))
     pygame.display.update()
 
+#Função de mostrar mensagens/avisos, pode ser usada multiplas vezes
+#Toda vez que está função for chamada, basta passar o valor da mensagem
+#EX: mostrar_mensagem('Você ganhou!')
+def mostrar_mensagem(mensagem):
+    pygame.time.delay(1000)
+    janela.blit(background, (0, 0))
+    texto = FONTE_PALAVRA.render(mensagem, 1, BRANCO)
+    janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
+    pygame.display.update()
+    pygame.time.delay(3000)
 
-while jogorodando:
-    clock.tick(FPS)
 
-    desenhar()
+def main():
+    #Loop, tudo ira acontecer enquanto (while) o jogo estiver rodando
+    jogorodando = True
+    while jogorodando:
+        global situacao_forca
 
+        #Loop do jogo
+        FPS = 60 #FPS máximo (vai na linha 20)
+        clock = pygame.time.Clock() #Variável com a função de travar o clock
+        clock.tick(FPS)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            jogorodando = False
-        
-        #Checar se o mouse clicou em algum botão através da distancia mouse-botao
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            m_x, m_y = pygame.mouse.get_pos()
-            for letra in letras:
-                x, y, ltr, visivel = letra
-                if visivel:
-                    dist = math.sqrt((x - m_x) ** 2 + (y - m_y) ** 2) #Teorema de pitagoras para calcular a distancia entre mouse-botao
-                    if dist < RAIO:
-                        print(ltr)
-                        letra[3] = False #3 é a posição de True na lista "letras" (linha 24 e linha 33)
-                        acertos.append(ltr)
-                        if ltr not in palavra:
-                            situacao_forca += 1
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                jogorodando = False
+            
+            #Checar se o mouse clicou em algum botão através da distancia mouse-botao
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                m_x, m_y = pygame.mouse.get_pos()
+                for letra in letras:
+                    x, y, ltr, visivel = letra
+                    if visivel:
+                        dist = math.sqrt((x - m_x) ** 2 + (y - m_y) ** 2) #Teorema de pitagoras para calcular a distancia entre mouse-botao
+                        if dist < RAIO:
+                            print(ltr)
+                            letra[3] = False #3 é a posição de True na lista "letras" (linha 24 e linha 33)
+                            acertos.append(ltr)
+                            if ltr not in palavra:
+                                situacao_forca += 1
 
-    #Ver se você ganhou ou perdeu.
-    ganhou = True
-    for letra in palavra:
-        if letra not in acertos:
-            ganhou = False
+        desenhar()
+
+        #Ver se você ganhou ou perdeu.
+        ganhou = True
+        for letra in palavra:
+            if letra not in acertos:
+                ganhou = False
+                break
+
+        if ganhou:
+            mostrar_mensagem('Você ganhou!')
             break
 
-    if ganhou:
-        janela.blit(background, (0, 0))
-        texto = FONTE_PALAVRA.render('Você GANHOU!', 1, BRANCO)
-        janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
-        pygame.display.update()
-        pygame.time.delay(300)
-        break
-
-    if situacao_forca == 6:
-        janela.blit(background, (0, 0))
-        texto = FONTE_PALAVRA.render('Você perdeu...', 1, BRANCO)
-        janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
-        pygame.display.update()
-        pygame.time.delay(300)
-        break
-
+        if situacao_forca == 6:
+            mostrar_mensagem('Você perdeu...')
+            break
+main()
 pygame.quit()
