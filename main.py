@@ -1,8 +1,12 @@
-import pygame
-import math
-import random
+import pygame, pygame_menu, math, random
+from pygame import mixer
 
+#Inicia o pygame
 pygame.init()
+
+#Inicia a música com o jogo
+mixer.music.load("background_song.mp3")
+mixer.music.play(-1)
 
 #Define a resolução. largura x altura
 LARGURA, ALTURA = (800,600) #WIDTH, HEIGHT
@@ -30,11 +34,10 @@ letras = []
 começox = round((LARGURA - (RAIO * 2 + VAO) * 13) / 2)
 começoy = 400
 A = 65 #Na programação, cada letra no teclado é definido por um número, e o A maiusculo é definido pelo 65
-
 for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 +1, +2...) para cada botão
-    x = começox + VAO * 2 + (RAIO * 2 + VAO) * (i % 13)
-    y = começoy + ((i // 13) * (VAO + RAIO *2))
-    letras.append([x, y, chr(A + i), True])
+     x = começox + VAO * 2 + (RAIO * 2 + VAO) * (i % 13)
+     y = começoy + ((i // 13) * (VAO + RAIO *2))
+     letras.append([x, y, chr(A + i), True])
 
 #Fontes
 FONTE_LETRA = pygame.font.SysFont('comicsans', 40) #fonte e tamanho
@@ -87,7 +90,8 @@ def desenhar():
 #Toda vez que está função for chamada, basta passar o valor da mensagem
 #EX: mostrar_mensagem('Você ganhou!')
 def mostrar_mensagem(mensagem):
-    pygame.time.delay(1000)
+    pygame.time.delay(800)
+    mixer.music.play()
     janela.blit(background, (0, 0))
     texto = FONTE_PALAVRA.render(mensagem, 1, BRANCO)
     janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
@@ -100,7 +104,13 @@ def main():
     jogorodando = True
     while jogorodando:
         global situacao_forca
-
+        global palavra
+        global acertos
+        global A
+        global VAO
+        global RAIO
+        global letras
+        
         #Loop do jogo
         FPS = 60 #FPS máximo (vai na linha 20)
         clock = pygame.time.Clock() #Variável com a função de travar o clock
@@ -123,22 +133,76 @@ def main():
                             acertos.append(ltr)
                             if ltr not in palavra:
                                 situacao_forca += 1
+                                
+            desenhar()
 
-        desenhar()
+            #Ver se você ganhou ou perdeu.
+            ganhou = True
+            for letra in palavra:
+                if letra not in acertos:
+                    ganhou = False
+                    break
 
-        #Ver se você ganhou ou perdeu.
-        ganhou = True
-        for letra in palavra:
-            if letra not in acertos:
-                ganhou = False
+            # CASO GANHE TOCA A MUSICA TEMA, MOSTRA A MENSAGEM DE VITÓRIA E RESETA O GAME.
+            if ganhou:
+                mixer.music.load("win_song.mp3")
+                mostrar_mensagem('Parabéns, você ganhou!')
+                pygame.time.delay(1000)
+                mixer.music.load("background_song.mp3")
+                mixer.music.play(-1)
+                situacao_forca = 0
+                palavra = random.choice(palavras)
+                acertos = []
+                letras = []
+                for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 +1, +2...) para cada botão
+                     x = começox + VAO * 2 + (RAIO * 2 + VAO) * (i % 13)
+                     y = começoy + ((i // 13) * (VAO + RAIO *2))
+                     letras.append([x, y, chr(A + i), True])
+                jogorodando = False
+                break
+            
+            # CASO PERCA TOCA A MUSICA TEMA, MOSTRA A MENSAGEM DE DERROTA E RESETA O GAME.
+            if situacao_forca == 6:
+                mixer.music.load("fail_song.mp3")
+                mostrar_mensagem('Poxa, não foi dessa vez...')
+                pygame.time.delay(1000)
+                mixer.music.load("background_song.mp3")
+                mixer.music.play(-1)
+                situacao_forca = 0
+                palavra = random.choice(palavras)
+                acertos = []
+                letras = []
+                for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 +1, +2...) para cada botão
+                     x = começox + VAO * 2 + (RAIO * 2 + VAO) * (i % 13)
+                     y = começoy + ((i // 13) * (VAO + RAIO *2))
+                     letras.append([x, y, chr(A + i), True])
+                jogorodando = False
                 break
 
-        if ganhou:
-            mostrar_mensagem('Você ganhou!')
-            break
+#CONFIGURANDO O TEMA DO MENU
+tema = pygame_menu.themes.Theme(
+                background_color=(0, 0, 0, 0), # transparent background
+                menubar_close_button = False,
+                title_shadow=True,
+                title_bar_style= pygame_menu.widgets.MENUBAR_STYLE_NONE,
+                title_font = pygame_menu.font.FONT_8BIT,
+                title_offset = (200, 40),
+                widget_font = pygame_menu.font.FONT_8BIT,
+                widget_font_color = (255, 255, 255, 255))
 
-        if situacao_forca == 6:
-            mostrar_mensagem('Você perdeu...')
-            break
-main()
+#DEFININDO BACKGROUND DO MENU
+imagem = pygame_menu.baseimage.BaseImage(
+    image_path='quadro.png',
+    drawing_mode=pygame_menu.baseimage.IMAGE_MODE_REPEAT_XY
+)
+tema.background_color = imagem
+
+#SETANDO O MENU
+menu = pygame_menu.Menu(ALTURA, LARGURA, 'Forca Game',
+                       theme=tema)
+menu.add_button('Jogar', main)
+menu.add_button('Sair', pygame_menu.events.EXIT)
+menu.mainloop(janela)
+
+# ENCERRANDO PYGAME
 pygame.quit()
