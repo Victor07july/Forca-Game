@@ -5,6 +5,7 @@ from pygame import mixer
 pygame.init()
 
 #Inicia a música com o jogo
+pygame.mixer.init()
 mixer.music.load("background_song.mp3")
 mixer.music.play(-1)
 
@@ -42,7 +43,7 @@ for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 
 #Fontes
 FONTE_LETRA = pygame.font.SysFont('comicsans', 40) #fonte e tamanho
 FONTE_PALAVRA = pygame.font.SysFont('comicsans', 30)
-FONTE_TITULO = pygame.font.SysFont('comicsans', 30)
+FONTE_TITULO = pygame.font.SysFont('lucidahandwriting', 18)
 
 #cores 
 BRANCO = (255, 255, 255)
@@ -50,8 +51,9 @@ PRETO = (0, 0, 0)
 
 #Variáveis do jogo
 situacao_forca = 0
-palavras = ['NATALIA', 'DESENVOLVEDOR', 'CELULAR']
+palavras = ['BRASIL', 'NORUEGA', 'CHINA', 'ITALIA', 'ALEMANHA']
 palavra = random.choice(palavras)
+
 
 acertos = [] #letras que letras foram acertadas
 
@@ -64,6 +66,25 @@ def desenhar():
     #Desenhar título
     texto = FONTE_TITULO.render('FORCA GAME', 1, BRANCO)
     janela.blit(texto, (LARGURA/2 -  texto.get_width()/2, 35))
+    
+    #Dica
+
+    if palavra == 'NORUEGA':
+        dica = FONTE_TITULO.render('País localizado na Europa, famoso por possuir navios Vikings. ', True, (255, 255, 255))
+        janela.blit(dica, (50, 70))
+    elif palavra == 'BRASIL':
+        dica = FONTE_TITULO.render('País da America do Sul, conhecido por suas praias e clima tropical. ', True, (255, 255, 255))
+        janela.blit(dica, (50, 70))
+    elif palavra == 'CHINA':
+        dica = dica = FONTE_TITULO.render('País origem do molho Shoyu ', True, (255, 255, 255))
+        janela.blit(dica, (50, 70))
+    elif palavra == 'ITALIA':
+        dica = FONTE_TITULO.render('País onde foi inventada a Pizza', True, (255, 255, 255))
+        janela.blit(dica, (50, 70))
+    elif palavra == 'ALEMANHA':
+        dica = FONTE_TITULO.render('País que causou a Segunda Guerra Mundial', True, (255, 255, 255))
+        janela.blit(dica, (50, 70))
+    
 
     #Desenhar palavras
     mostrar_palavra = ''
@@ -110,6 +131,7 @@ def main():
         global VAO
         global RAIO
         global letras
+
         
         #Loop do jogo
         FPS = 60 #FPS máximo (vai na linha 20)
@@ -119,6 +141,7 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 jogorodando = False
+
             
             #Checar se o mouse clicou em algum botão através da distancia mouse-botao
             if event.type == pygame.MOUSEBUTTONDOWN:
