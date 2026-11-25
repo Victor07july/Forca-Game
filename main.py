@@ -1,144 +1,409 @@
-import pygame
 import math
+import os
 import random
+import sys
+import pygame
+from pygame import mixer
+import pygame_menu
 
+# No WSLg (Windows + WSL), direciona o SDL para o servidor PulseAudio do Windows
+if 'PULSE_SERVER' in os.environ and 'SDL_AUDIODRIVER' not in os.environ:
+    os.environ['SDL_AUDIODRIVER'] = 'pulseaudio'
+
+# Inicia o pygame
 pygame.init()
 
-#Define a resolução. largura x altura
-LARGURA, ALTURA = (800,600) #WIDTH, HEIGHT
-janela = pygame.display.set_mode((LARGURA, ALTURA))
+# Diretório base para carregar arquivos de imagem e som com segurança
+DIRETORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 
-#Plano de fundo/background (precisa ser colocado no loop)
-background = pygame.image.load('quadro.png')
+# Inicializa o áudio do jogo (com fallback seguro caso falte biblioteca/placa de som)
+AUDIO_DISPONIVEL = False
+som_ativo = True
+try:
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
+    AUDIO_DISPONIVEL = True
+except pygame.error as erro_audio:
+    AUDIO_DISPONIVEL = False
+    som_ativo = False
+    print(f'Aviso: não foi possível iniciar o áudio ({erro_audio}).')
 
-#Título do jogo
+
+def tocar_musica_fundo():
+    if AUDIO_DISPONIVEL and som_ativo:
+        mixer.music.load(os.path.join(DIRETORIO_BASE, 'background_song.mp3'))
+        mixer.music.play(-1)
+
+
+def alternar_som():
+    global som_ativo
+    if not AUDIO_DISPONIVEL:
+        return
+    som_ativo = not som_ativo
+    botao_som.set_title('Som ON' if som_ativo else 'Som OFF')
+    if som_ativo:
+        tocar_musica_fundo()
+    else:
+        mixer.music.stop()
+
+
+# Inicia a música de fundo com o jogo
+tocar_musica_fundo()
+
+# Resolução base de referência e janela redimensionável (suporta maximizar e F11)
+LARGURA_BASE, ALTURA_BASE = (800, 600)
+LARGURA, ALTURA = (LARGURA_BASE, ALTURA_BASE)
+janela = pygame.display.set_mode((LARGURA, ALTURA), pygame.RESIZABLE)
 pygame.display.set_caption('Forca Game')
 
-#Imagens do jogo
-imagens = []
-for i in range(7):
-    addimg = pygame.image.load('hangman' + str(i) + '.png') #Variável para adicionar imagens na list imagens através do append (Linha 17 e 14)
-    imagens.append(addimg)
+# Carrega imagens originais uma única vez para reescalar com nitidez quando maximizar
+CAMINHO_QUADRO = os.path.join(DIRETORIO_BASE, 'quadro.png')
+background_original = pygame.image.load(CAMINHO_QUADRO)
+imagens_originais = [
+    pygame.image.load(os.path.join(DIRETORIO_BASE, f'hangman{i}.png'))
+    for i in range(7)
+]
 
-#Variáveis dos botões, que serão desenhados começando de seu centro
-#O jogo terá 26 botoes, com 13 em duas filas
-#A distância entre 2 botões é seu raio * 2 + vão
-#Para determinar o começo e fim da fila, é calculada a largura da janela (800) -  onde quermos que a fila comece na reta x
-RAIO = 20
-VAO = 15
-letras = []
-começox = round((LARGURA - (RAIO * 2 + VAO) * 13) / 2)
-começoy = 400
-A = 65 #Na programação, cada letra no teclado é definido por um número, e o A maiusculo é definido pelo 65
-
-for i in range(26): #Determinar a posição x, y e letras (começando do A = 65 +1, +2...) para cada botão
-    x = começox + VAO * 2 + (RAIO * 2 + VAO) * (i % 13)
-    y = começoy + ((i // 13) * (VAO + RAIO *2))
-    letras.append([x, y, chr(A + i), True])
-
-#Fontes
-FONTE_LETRA = pygame.font.SysFont('comicsans', 40) #fonte e tamanho
-FONTE_PALAVRA = pygame.font.SysFont('comicsans', 30)
-FONTE_TITULO = pygame.font.SysFont('comicsans', 30)
-
-#cores 
+# Cores
 BRANCO = (255, 255, 255)
 PRETO = (0, 0, 0)
+AMARELO_GIZ = (255, 235, 130)
 
-#Variáveis do jogo
+# Variáveis dinâmicas dependentes da resolução atual
+A = 65  # Código ASCII da letra 'A' maiúscula
+RAIO = 20
+VAO = 15
+ESPESSURA_CIRCULO = 3
+background = background_original
+imagens = list(imagens_originais)
+FONTE_LETRA = None
+FONTE_PALAVRA = None
+FONTE_TITULO = None
+FONTE_DICA = None
+
+# Palavras e dicas recuperadas do projeto original (commit afc5e50)
+DICAS_PALAVRAS = {
+    'BRASIL': 'País da América do Sul, conhecido por suas praias e clima tropical.',
+    'NORUEGA': 'País localizado na Europa, famoso por possuir navios Vikings.',
+    'CHINA': 'País origem do molho Shoyu.',
+    'ITALIA': 'País onde foi inventada a Pizza.',
+    'ALEMANHA': 'País que causou a Segunda Guerra Mundial.',
+}
+palavras = list(DICAS_PALAVRAS.keys())
+
 situacao_forca = 0
-palavras = ['NATALIA', 'DESENVOLVEDOR', 'CE LU LAR']
-palavra = random.choice(palavras)
+palavra = ''
+acertos = []
+letras = []
+menu = None
 
-acertos = [] #letras que letras foram acertadas
 
-#Função para desenhar itnes no jogo, deve ficar dentro do loop  (Linha 67)
+def calcular_posicoes_letras(visibilidades=None):
+    sy = ALTURA / ALTURA_BASE
+    largura_fila = 12 * (RAIO * 2 + VAO)
+    primeiro_x = round((LARGURA - largura_fila) / 2)
+    começoy = round(400 * sy)
+
+    botoes = []
+    for i in range(26):
+        x = primeiro_x + (RAIO * 2 + VAO) * (i % 13)
+        y = começoy + ((i // 13) * (VAO + RAIO * 2))
+        visivel = True if visibilidades is None else visibilidades[i]
+        botoes.append([x, y, chr(A + i), visivel])
+    return botoes
+
+
+def criar_botoes_letras():
+    return calcular_posicoes_letras()
+
+
+def atualizar_resolucao(nova_largura, nova_altura):
+    global LARGURA, ALTURA, RAIO, VAO, ESPESSURA_CIRCULO
+    global background, imagens, letras
+    global FONTE_LETRA, FONTE_PALAVRA, FONTE_TITULO, FONTE_DICA
+
+    LARGURA = max(480, nova_largura)
+    ALTURA = max(360, nova_altura)
+    sx = LARGURA / LARGURA_BASE
+    sy = ALTURA / ALTURA_BASE
+    escala = min(sx, sy)
+
+    # Redimensiona o quadro-negro para preencher toda a janela
+    background = pygame.transform.smoothscale(background_original, (LARGURA, ALTURA))
+
+    # Redimensiona as imagens da forca mantendo a proporção original
+    imagens = [
+        pygame.transform.smoothscale(
+            img,
+            (max(1, round(img.get_width() * escala)), max(1, round(img.get_height() * escala))),
+        )
+        for img in imagens_originais
+    ]
+
+    # Escala botões e fontes proporcionalmente
+    RAIO = max(12, round(20 * escala))
+    VAO = max(6, round(15 * escala))
+    ESPESSURA_CIRCULO = max(2, round(3 * escala))
+
+    FONTE_LETRA = pygame.font.SysFont('comicsans', max(18, round(40 * escala)))
+    FONTE_PALAVRA = pygame.font.SysFont('comicsans', max(16, round(30 * escala)))
+    FONTE_TITULO = pygame.font.SysFont('comicsans', max(16, round(28 * escala)))
+    FONTE_DICA = pygame.font.SysFont('lucidahandwriting,comicsans,dejavusans', max(12, round(18 * escala)))
+
+    # Reposiciona os 26 botões preservando quais letras já foram clicadas
+    visibilidades = [b[3] for b in letras] if len(letras) == 26 else None
+    letras = calcular_posicoes_letras(visibilidades)
+
+    # Atualiza tamanho, fontes e centralização do menu se já estiver criado
+    if menu is not None:
+        menubar = menu.get_menubar()
+        menubar.update_font({'size': max(20, round(40 * escala))})
+        for widget in menu.get_widgets():
+            widget.update_font({'size': max(16, round(28 * escala))})
+            widget.set_margin(0, round(22 * escala))
+        menu.resize(LARGURA, ALTURA)
+        menubar._offsetx = max(0, (LARGURA - menubar.get_width()) // 2)
+        menubar._offsety = round(70 * sy)
+
+
+def sincronizar_janela():
+    global janela
+    sup_atual = pygame.display.get_surface()
+    if sup_atual is not None:
+        janela = sup_atual
+    larg_atual, alt_atual = janela.get_size()
+    if (larg_atual, alt_atual) != (LARGURA, ALTURA):
+        atualizar_resolucao(larg_atual, alt_atual)
+
+
+def reiniciar_jogo():
+    global situacao_forca, palavra, acertos, letras
+    situacao_forca = 0
+    palavra = random.choice(palavras)
+    acertos = []
+    letras = criar_botoes_letras()
+
+
+atualizar_resolucao(LARGURA_BASE, ALTURA_BASE)
+reiniciar_jogo()
+
+
+# Função para desenhar itens no jogo adaptados ao tamanho atual da janela
 def desenhar():
-    janela.fill((0, 0, 0))
+    sincronizar_janela()
+    sx = LARGURA / LARGURA_BASE
+    sy = ALTURA / ALTURA_BASE
 
-    janela.blit(background, (0,0)) #Desenha o quadro verde na tela (Linha 11)
+    janela.fill(PRETO)
+    janela.blit(background, (0, 0))
 
-    #Desenhar título
-    texto = FONTE_TITULO.render('FORCA GAME', 1, BRANCO)
-    janela.blit(texto, (LARGURA/2 -  texto.get_width()/2, 35))
+    # Desenhar título
+    texto = FONTE_TITULO.render('FORCA GAME', True, BRANCO)
+    janela.blit(texto, (LARGURA / 2 - texto.get_width() / 2, round(30 * sy)))
 
-    #Desenhar palavras
+    # Desenhar dica correspondente à palavra sorteada
+    texto_dica = DICAS_PALAVRAS.get(palavra, '')
+    if texto_dica:
+        dica = FONTE_DICA.render(f'Dica: {texto_dica}', True, AMARELO_GIZ)
+        janela.blit(dica, (LARGURA / 2 - dica.get_width() / 2, round(72 * sy)))
+
+    # Desenhar palavra oculta/revelada
     mostrar_palavra = ''
     for letra in palavra:
-        if letra in acertos:
+        if letra == ' ':
+            mostrar_palavra += '  '
+        elif letra in acertos:
             mostrar_palavra += letra + ' '
-        else: 
+        else:
             mostrar_palavra += '_ '
-    texto = FONTE_PALAVRA.render(mostrar_palavra, 1, (255, 255, 255)) 
-    janela.blit(texto, (400, 200))
+    texto = FONTE_PALAVRA.render(mostrar_palavra, True, BRANCO)
+    janela.blit(texto, (round(400 * sx), round(220 * sy)))
 
-    #Desenhar letras
-    for letra in letras: #Para cada letra dentro da lista letra...
-         x, y, ltr, visivel = letra
-         if visivel:
-            pygame.draw.circle(janela, (255, 255, 255), (x, y), RAIO, 3) #3 = grossura da linha, cor da borda
-            texto = FONTE_LETRA.render(ltr, 1, (255, 255, 255))#o que imprimir, anti-alising, cor
-            janela.blit(texto, (x - texto.get_width()/2, y - texto.get_height()/2)) #ao dividir a largura do texto por 2, nós saberemos onde ficara o meio do texto, cor da linha
+    # Desenhar botões das letras
+    for letra in letras:
+        x, y, ltr, visivel = letra
+        if visivel:
+            pygame.draw.circle(janela, BRANCO, (x, y), RAIO, ESPESSURA_CIRCULO)
+            texto = FONTE_LETRA.render(ltr, True, BRANCO)
+            janela.blit(texto, (x - texto.get_width() / 2, y - texto.get_height() / 2))
 
-    janela.blit(imagens[situacao_forca], (150,100))
+    janela.blit(imagens[situacao_forca], (round(150 * sx), round(115 * sy)))
     pygame.display.update()
 
-#Função de mostrar mensagens/avisos, pode ser usada multiplas vezes
-#Toda vez que está função for chamada, basta passar o valor da mensagem
-#EX: mostrar_mensagem('Você ganhou!')
-def mostrar_mensagem(mensagem):
-    pygame.time.delay(1000)
-    janela.blit(background, (0, 0))
-    texto = FONTE_PALAVRA.render(mensagem, 1, BRANCO)
-    janela.blit(texto, (LARGURA/2 - texto.get_width()/2, ALTURA/2 - texto.get_height()/2))
-    pygame.display.update()
-    pygame.time.delay(3000)
+
+def aguardar_responsivo(duracao_ms, callback_desenho=None):
+    inicio = pygame.time.get_ticks()
+    relogio = pygame.time.Clock()
+    while pygame.time.get_ticks() - inicio < duracao_ms:
+        relogio.tick(60)
+        redimensionou = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit(0)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                pygame.display.toggle_fullscreen()
+                redimensionou = True
+            if event.type == pygame.VIDEORESIZE:
+                atualizar_resolucao(event.w, event.h)
+                redimensionou = True
+
+        larg_atual, alt_atual = janela.get_size()
+        if (larg_atual, alt_atual) != (LARGURA, ALTURA):
+            atualizar_resolucao(larg_atual, alt_atual)
+            redimensionou = True
+
+        if redimensionou and callback_desenho is not None:
+            callback_desenho()
+
+
+# Mostra mensagem de fim de jogo, toca o efeito correspondente e retoma a música de fundo
+def mostrar_mensagem(mensagem, subtitulo=None, arquivo_som=None):
+    aguardar_responsivo(800, desenhar)
+
+    if AUDIO_DISPONIVEL and som_ativo and arquivo_som:
+        mixer.music.load(os.path.join(DIRETORIO_BASE, arquivo_som))
+        mixer.music.play()
+
+    def desenhar_tela_mensagem():
+        janela.blit(background, (0, 0))
+        texto = FONTE_PALAVRA.render(mensagem, True, BRANCO)
+        if subtitulo:
+            texto_sub = FONTE_PALAVRA.render(subtitulo, True, AMARELO_GIZ)
+            janela.blit(texto, (LARGURA / 2 - texto.get_width() / 2, ALTURA / 2 - texto.get_height()))
+            janela.blit(texto_sub, (LARGURA / 2 - texto_sub.get_width() / 2, ALTURA / 2 + round(10 * (ALTURA / ALTURA_BASE))))
+        else:
+            janela.blit(texto, (LARGURA / 2 - texto.get_width() / 2, ALTURA / 2 - texto.get_height() / 2))
+        pygame.display.update()
+
+    desenhar_tela_mensagem()
+    aguardar_responsivo(4000, desenhar_tela_mensagem)
+
+    if AUDIO_DISPONIVEL and som_ativo and arquivo_som:
+        tocar_musica_fundo()
+
+    pygame.event.clear()
 
 
 def main():
-    #Loop, tudo ira acontecer enquanto (while) o jogo estiver rodando
-    jogorodando = True
-    while jogorodando:
-        global situacao_forca
+    global situacao_forca
+    sincronizar_janela()
+    reiniciar_jogo()
 
-        #Loop do jogo
-        FPS = 60 #FPS máximo (vai na linha 20)
-        clock = pygame.time.Clock() #Variável com a função de travar o clock
+    FPS = 60
+    clock = pygame.time.Clock()
+    jogorodando = True
+
+    while jogorodando:
         clock.tick(FPS)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                jogorodando = False
-            
-            #Checar se o mouse clicou em algum botão através da distancia mouse-botao
-            if event.type == pygame.MOUSEBUTTONDOWN:
+                pygame.quit()
+                sys.exit(0)
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    jogorodando = False
+                elif event.key == pygame.K_F11:
+                    pygame.display.toggle_fullscreen()
+
+            if event.type == pygame.VIDEORESIZE:
+                atualizar_resolucao(event.w, event.h)
+
+            # Checar se o mouse clicou em algum botão através da distância mouse-botão
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 m_x, m_y = pygame.mouse.get_pos()
                 for letra in letras:
                     x, y, ltr, visivel = letra
                     if visivel:
-                        dist = math.sqrt((x - m_x) ** 2 + (y - m_y) ** 2) #Teorema de pitagoras para calcular a distancia entre mouse-botao
+                        dist = math.sqrt((x - m_x) ** 2 + (y - m_y) ** 2)
                         if dist < RAIO:
-                            print(ltr)
-                            letra[3] = False #3 é a posição de True na lista "letras" (linha 24 e linha 33)
+                            letra[3] = False
                             acertos.append(ltr)
                             if ltr not in palavra:
                                 situacao_forca += 1
 
         desenhar()
 
-        #Ver se você ganhou ou perdeu.
-        ganhou = True
-        for letra in palavra:
-            if letra not in acertos:
-                ganhou = False
-                break
+        # Verificar se ganhou ou perdeu
+        ganhou = all(letra in acertos or letra == ' ' for letra in palavra)
 
         if ganhou:
-            mostrar_mensagem('Você ganhou!')
+            mostrar_mensagem('Parabéns, você ganhou!', arquivo_som='win_song.mp3')
             break
 
         if situacao_forca == 6:
-            mostrar_mensagem('Você perdeu...')
+            mostrar_mensagem(
+                'Poxa, não foi dessa vez...',
+                subtitulo=f'A palavra era: {palavra}',
+                arquivo_som='fail_song.mp3',
+            )
             break
-main()
-pygame.quit()
+
+
+def sair_jogo():
+    pygame.quit()
+    sys.exit(0)
+
+
+# DEFININDO BACKGROUND DO MENU
+imagem_fundo_menu = pygame_menu.baseimage.BaseImage(
+    image_path=CAMINHO_QUADRO,
+    drawing_mode=pygame_menu.baseimage.IMAGE_MODE_FILL,
+)
+
+# CONFIGURANDO O TEMA DO MENU (pygame-menu 4.x)
+tema = pygame_menu.themes.Theme(
+    background_color=imagem_fundo_menu,
+    title_bar_style=pygame_menu.widgets.MENUBAR_STYLE_NONE,
+    title_close_button=False,
+    title_font_shadow=True,
+    title_font=pygame_menu.font.FONT_8BIT,
+    title_font_size=40,
+    title_font_color=BRANCO,
+    title_offset=(200, 70),
+    widget_font=pygame_menu.font.FONT_8BIT,
+    widget_font_size=28,
+    widget_font_color=BRANCO,
+    selection_color=AMARELO_GIZ,
+    widget_margin=(0, 22),
+)
+
+# SETANDO O MENU INICIAL
+menu = pygame_menu.Menu(
+    'Forca Game',
+    LARGURA,
+    ALTURA,
+    theme=tema,
+    mouse_motion_selection=True,
+)
+menu.add.button('Jogar', main)
+botao_som = menu.add.button('Som ON' if som_ativo else 'Som OFF', alternar_som)
+menu.add.button('Sair', sair_jogo)
+atualizar_resolucao(LARGURA, ALTURA)
+
+
+def executar_menu():
+    clock = pygame.time.Clock()
+    while True:
+        clock.tick(60)
+        eventos = pygame.event.get()
+        for event in eventos:
+            if event.type == pygame.QUIT:
+                sair_jogo()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                pygame.display.toggle_fullscreen()
+            if event.type == pygame.VIDEORESIZE:
+                atualizar_resolucao(event.w, event.h)
+
+        sincronizar_janela()
+
+        if menu.is_enabled():
+            menu.update(eventos)
+            menu.draw(janela)
+            pygame.display.update()
+
+
+if __name__ == '__main__':
+    executar_menu()
